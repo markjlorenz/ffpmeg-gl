@@ -1,0 +1,99 @@
+# docker build . -f gl_dockerfile -t soodesune/ffmpeg:gl
+
+FROM    soodesune/ffmpeg:base AS base
+
+WORKDIR /tmp/workdir
+
+FROM    base as build
+
+ARG     PKG_CONFIG_PATH=/opt/ffmpeg/lib/pkgconfig
+ARG     LD_LIBRARY_PATH=/opt/ffmpeg/lib
+ARG     PREFIX=/opt/ffmpeg
+ARG     MAKEFLAGS="-j2"
+
+# GLSL transitions between concatenated videos
+# https://github.com/transitive-bullshit/ffmpeg-gl-transition
+# RUN \
+#         git clone https://github.com/transitive-bullshit/ffmpeg-gl-transition.git /tmp/ffmpeg-gl-transition
+
+# Install packages needed for gltransitions
+RUN \
+       apt-get install -yq libglfw3 libglfw3-dev libglew1.13 libglew-dev glew-utils libxcb1 libxcb1-dev libxcb-shm0-dev libxcb-shm0 libxcb-xfixes0-dev libxcb-xfixes0 libgl1-mesa-glx xserver-xorg-video-dummy mesa-utils x11-apps
+
+## ffmpeg https://ffmpeg.org/
+RUN  \
+        DIR=$(mktemp -d) && cd ${DIR} && \
+        curl -sLO https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
+        tar -jx --strip-components=1 -f ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
+        ln -s /tmp/ffmpeg-gl-transition/vf_gltransition.c libavfilter/ && \
+        ls libavfilter && \
+        git apply /tmp/ffmpeg-gl-transition/ffmpeg.diff && \
+        ./configure \
+        --disable-debug \
+        --disable-doc \
+        --disable-ffplay \
+        --enable-shared \
+        --enable-avresample \
+        --enable-libopencore-amrnb \
+        --enable-libopencore-amrwb \
+        --enable-filter=gltransition \
+        --enable-gpl \
+        --enable-libass \
+        --enable-libfreetype \
+        --enable-libvidstab \
+        --enable-libmp3lame \
+        --enable-libopenjpeg \
+        --enable-libopus \
+        --enable-libtheora \
+        --enable-libvorbis \
+        --enable-libvpx \
+        --enable-libx265 \
+        --enable-libxvid \
+        --enable-libx264 \
+        --enable-nonfree \
+        --enable-opengl \
+        --enable-openssl \
+        --enable-libfdk_aac \
+        --enable-libkvazaar \
+        --enable-postproc \
+        --enable-small \
+        --enable-version3 \
+        --extra-cflags="-I${PREFIX}/include" \
+        --extra-ldflags="-L${PREFIX}/lib" \
+         --extra-libs="-ldl -lGLEW -lglfw" \
+        --prefix="${PREFIX}" && \
+        make && \
+        make install && \
+        make distclean && \
+        hash -r && \
+        cd tools && \
+        make qt-faststart && \
+        cp qt-faststart ${PREFIX}/bin
+
+## cleanup
+RUN \
+        ldd ${PREFIX}/bin/ffmpeg | grep opt/ffmpeg | cut -d ' ' -f 3 | xargs -i cp {} /usr/local/lib/ && \
+        cp ${PREFIX}/bin/* /usr/local/bin/ && \
+        cp -r ${PREFIX}/share/ffmpeg /usr/local/share/ && \
+        LD_LIBRARY_PATH=/usr/local/lib ffmpeg -buildconf && \
+        ldconfig
+
+FROM        base AS release
+MAINTAINER  Mark Lorenz <markjlorenz@gmail.com>
+
+# Get the dummyX11 config
+RUN \
+       curl -sL http://xpra.org/xorg.conf > /etc/X11/xorg.conf
+
+# Install packages needed for gltransitions
+RUN \
+       apt-get install -yq libglfw3 libglfw3-dev libglew1.13 libglew-dev glew-utils libxcb1 libxcb1-dev libxcb-shm0-dev libxcb-shm0 libxcb-xfixes0-dev libxcb-xfixes0 libgl1-mesa-glx xserver-xorg-video-dummy mesa-utils x11-apps
+
+COPY        ./init.sh /etc/init.sh
+CMD         ["ffmpeg"]
+ENTRYPOINT  ["/etc/init.sh"]
+ENV         LD_LIBRARY_PATH=/usr/local/lib \
+            FONTCONFIG_PATH=/etc/fonts \
+            DISPLAY=:1
+
+COPY --from=build /usr/local /usr/local/
