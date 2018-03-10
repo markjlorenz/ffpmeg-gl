@@ -1,4 +1,10 @@
-# Examples
+# Ffmpeg with built in GL transitions
+
+Based on these two projects:
+- https://github.com/transitive-bullshit/ffmpeg-gl-transition
+- https://github.com/jrottenberg/ffmpeg
+
+## Examples
 
 ```
 # Concate 3 source files using fancy GLX tranitions
@@ -22,7 +28,7 @@ docker run --rm \
       [v200]trim=0:4[v201]; \
       [v210]trim=4:5[v211t]; \
       [v211t]setpts=PTS-STARTPTS[v211]; \
-      [v011][v101]gltransition=duration=1:source=./crosswarp.glsl[vt0]; \
+      [v011][v101]gltransition=duration=1:source=/filters/crosswarp.glsl[vt0]; \
       [v111][v201]gltransition=duration=1[vt1]; \
       [v001][vt0][vt1][v211]concat=n=4[outv]; \
       [outv]subtitles=subtitle.srt[outs]; \
@@ -33,7 +39,10 @@ docker run --rm \
     -y -f mpegts out.mp4
 ```
 
-
 SPLIT: https://trac.ffmpeg.org/wiki/Creating%20multiple%20outputs
 TRIM: https://ffmpeg.org/ffmpeg-filters.html#trim
 SETPTS: https://ffmpeg.org/ffmpeg-filters.html#setpts_002c-asetpts
+
+## Available transitions
+
+- crosswarp
